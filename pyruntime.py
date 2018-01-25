@@ -79,7 +79,7 @@ def lambda_logf(profile, format_string, *args):
     sink.write(f"{get_pretty_time(False)} ")
     if LOG_CONTEXT:
         sink.write(f' {{{LOG_CONTEXT}}} ')
-    sink.write(format_string.format(args))
+    sink.write(format_string.format(*args))
     
     if profile:
         duration = get_time_of_day_millis() - start
