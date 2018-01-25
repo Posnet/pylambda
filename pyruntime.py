@@ -76,13 +76,13 @@ def lambda_logf(profile, format_string, *args):
     if not LOG_SINK:
         sink = sys.stderr
 
-    sink.write(get_pretty_time(False))
+    sink.write(f"{get_pretty_time(False)} ")
     if LOG_CONTEXT:
-        sink.write(f'{{{LOG_CONTEXT}}}')
+        sink.write(f' {{{LOG_CONTEXT}}} ')
     sink.write(format_string % args)
     
     if profile:
-        duration = get_time_of_day_millis - start
+        duration = get_time_of_day_millis() - start
         if duration > 100:
             lambda_logf(False, "[WARN] logging previous line took %llums\n", duration)
         
