@@ -49,10 +49,43 @@ def parse_x_amzn_trace_id(trace_id):
     
     return ctx
 
-def log_sb(msg):
-    pass
+def log_sb(msg)
+    lambda_logf(True, "%s\n", msg)
     
+def get_time_of_day_millis():
+    return int(time.time() * 1000)
     
+def get_pretty_time(is_iso=False):
+    t = time.time()
+    t_struct = time.gmtime(t)
+    millis = round((t - int(t)) * 1000)
+    if is_iso:
+        text = time.strftime('%FT%T', t_struct)
+        fmt  = '%s.%03ldZ'
+    else:
+        text = time.strftime('%d %b %Y %H:%M:%S', t_struct)
+        fmt  =  '%s,%03ldZ' 
+        
+    return fmt % (text, millis)
+        
+def lambda_logf(profile, format_string, *args):
+    
+    if profile:
+        start = get_time_of_day_millis()
+        
+    if not LOG_SINK:
+        sink = sys.stderr
+
+    sink.write(get_pretty_time(False))
+    if LOG_CONTEXT:
+        sink.write(f'{{{LOG_CONTEXT}}}')
+    sink.write(format_string % args)
+    
+    if profile:
+        duration = get_time_of_day_millis - start
+        if duration > 100:
+            lambda_logf(False, "[WARN] logging previous line took %llums\n", duration)
+        
 def runtime_init():
     runtime = Runtime()
     
