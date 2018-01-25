@@ -49,7 +49,7 @@ def parse_x_amzn_trace_id(trace_id):
     
     return ctx
 
-def log_sb(msg)
+def log_sb(msg):
     lambda_logf(True, "%s\n", msg)
     
 def get_time_of_day_millis():
