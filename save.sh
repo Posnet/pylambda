@@ -3,5 +3,6 @@ aws lambda get-function --function-name inject3 | jq '.Code.Location' | xargs -n
 unzip -o lambda_code.zip;
 rm lambda_code.zip;
 git add -A;
-git commit -m 'autosave'
+git commit -m 'autosave';
+git sync;
 
