@@ -329,7 +329,14 @@ def main():
         runtime.report_running(start[0])
         runtime.report_done(start[0], None, None)
         logger.warn('after report running')
-        logger.warn(runtime.receive_command())
+        cnt = 0
+        
+        while True:
+            cnt += 1
+            logger.info('invoke: %s', cnt)
+            invoke = runtime.receive_command()
+            runtime.report_done('', None, None)
+            
     except Exception as e:
         print('ERROR')
         logger.exception(e)
