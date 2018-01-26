@@ -55,11 +55,23 @@ class SharedMem(PStruct):
     ]
         
 class timeval(PStruct):
+    micro_factor = 10 ** 6
     _fields_ = [
         ("tv_sec", ctypes.c_uint64),
         ("tv_usec", ctypes.c_uint64)
         ]
+        
+    @staticmethod
+    def from_time(t):
+        res = timeval()
+        res.tv_sec = int(t)
+        res.tv_sec = (t - int(t)) * timeval.micro_factor
     
+    
+    def to_time(self):
+        return self.tv_sec + (self.tv_usec / timeval.micro_factor)
+        
+        
 class XrayContext(PStruct):
     _fields_ = [
         ("trace_id", ctypes.c_char * 255),

@@ -156,6 +156,8 @@ class PyRuntime:
         # logger.debug(runtime)
         self._runtime = runtime
         
+    def log_bytes(self, msg, fd):
+        pass
         
     def log_sb(self, msg):
         self.lambda_logf(True, "{}\n", msg)
@@ -184,8 +186,8 @@ class PyRuntime:
     def send_command(self, socket, command, kv_dict):
         body = b''
         for k, v in kv_dict.items():
-            body += (k + '\x00').encode('ascii')
-            body += (v + '\x00').encode('ascii')
+            body += (str(k) + '\x00').encode('ascii')
+            body += (str(v) + '\x00').encode('ascii')
     
         header = self.COMMAND_MAGIC
         header += struct.pack('>I', len(body))
@@ -262,7 +264,57 @@ class PyRuntime:
         }
         # logger.debug('running message: %s', running_msg_dict)
         self.send_command(self.ctrl_sock, 'RUNNING', running_msg_dict)
-
+        
+    def report_user_init_start(self):
+        self._runtime.init_start_time = timeval.from_time(time.time())
+        
+        
+    def report_user_init_end(self):
+        self._runtime.init_end_time = timeval.from_time(time.time())
+        
+        
+    def report_user_invoke_start(self):
+        # TODO: if we are traced with xray, we need to send subsegments
+        self._runtime.is_initialized = True
+        
+        
+    def report_user_invoke_end(self):
+        # TODO: if we are traced with xray, we need to send subsegments
+        pass
+    
+    
+    def get_remaining_time(self):
+        pass
+    
+    
+    def send_console_message(self):
+        pass
+    
+    def report_fault(self):
+        pass
+    
+    def receive_invoke(self):
+        pass
+        # return (
+        # invokeid,
+        # data_sock,
+        # credentials,
+        # event_body,
+        # context_objs,
+        # invoked_function_arn,
+        # x_amzn_trace_id
+        # )
+    
+    def report_done(self, invokeid, errortype, result):
+        # TODO write output to shared buffer
+        
+        command = 'DONE'
+        kv_dict = {'errortype': errortype or '',
+        'SBLOG:MaxStallTimeMs': self._runtime.max_stall_time_ms or 0,
+        'wait_for_exit': 0}
+        
+        self.send_command(self.ctrl_sock, command, kv_dict)
+        
     
 # ---------------------------------------------------------------------------- #
 
@@ -275,112 +327,12 @@ def main():
         start = runtime.receive_start()
         logger.debug(start)
         runtime.report_running(start[0])
+        runtime.report_done(start[0], None, None)
+        logger.warn('after report running')
+        logger.warn(runtime.receive_command())
     except Exception as e:
         print('ERROR')
         logger.exception(e)
         pass
     logger.info('End of Boostrap')    
 # ---------------------------------------------------------------------------- #
-
-
-
-
-#### RUNTIME STUFF ###
-#     
-#     l = ctypes.cdll.LoadLibrary('/var/runtime/awslambda/runtime.cpython-36m-x86_64-linux-gnu.so')
-#     rt = rt_pointer.in_dll(l, '__runtime')
-
-
-#  # f = open('/dev/shm/sandbox2753_eventbody111')
-#     # mm = mmap.mmap(f.fileno(), 100)
-    
-#     # with open("/proc/1/maps", 'r') as f:
-#         # for _ in range(15):
-#             # print(f.readline().strip())
-    
-    
-   
-    
-    
-    
-#     print(rt.contents.pre_load_time_ns)
-#     print(rt.contents.post_load_time_ns)
-    
-#     with open('/proc/1/environ') as f:
-#         print(f.read().split('\0'))
-#     # shared_mem = rt.contents.shared_mem.contents
-#     # print(str(shared_mem))
-#     # print()
-#     # # print(shared_mem.event_body, shared_mem.event_body_len)
-#     # res = b'{"test":"result"}'
-#     # res_len = len(res)
-#     # shared_mem.event_body = res
-#     # shared_mem.response_body_len = ctypes.c_int(res_len)
-#     # # print(shared_mem.event_body)
-#     # print(str(shared_mem))
-#     # print()
-#     # print(l.runtime_report_done(rt, ctypes.c_char_p(bytes(context.aws_request_id, 'ascii')), None, False))
-#     # print('after done')
-#     # print()
-#     # print(str(shared_mem))
-
-    
-#     # sys.exit(0)
-    
-    
-#     # import runtime
-#     # runtime.log_bytes(b"to 1", 1)
-#     # runtime.log_bytes(b"to 2", 2)
-#     # runtime.log_bytes(b"to 3", 3)
-#     # runtime.log_bytes(b"to 20", 20)
-    
-#     # print(context.__dict__)
-#     # runtime.report_user_invoke_end()
-#     # runtime.report_done(context.aws_request_id, None, '{"test":"result"}')
-#     # sys.exit()
-#     # print(check_output('cat /proc/1/mountinfo', shell=True).decode('ascii'))
-#     # context.log('test')
-#     # print(sys.stdin)
-#     # print(sys.stdout)
-#     # print(sys.stderr)
-#     # print(inspect.stack())
-#     # for fd in range(50):
-#     #     try:
-#     #         # print(f"{fd}: {fcntl.fcntl(fd, fcntl.F_GETFD)}")
-#     #         fcntl.fcntl(fd, fcntl.F_SETFD, 0)
-#     #         print(f"{fd}: {fcntl.fcntl(fd, fcntl.F_GETFD)}")
-#     #     except:
-#     #         pass
-        
-#     # os.execv('/var/task/thing.py', [''])
-#     # runtime.send_console_message("before exec")
-#     # try:
-#     #     # print(check_output("/var/lang/bin/python3.6 /var/task/lambda_function.py",  stderr=subprocess.STDOUT, shell=True).decode("ascii"))
-#     #     # print(check_output("/var/lang/bin/python3.6 --version", shell=True).decode("ascii"))
-#     #     cmd = f"/var/lang/bin/python3.6 /var/task/lambda_function.py"
-        
-#     #     p = subprocess.run(cmd.split(" "), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-#     #     out = p.stdout.decode('ascii')
-#     #     err = p.stderr.decode('ascii')
-#     #     ret = err + "\n" + out
-#     #     ret =  ret.encode('ascii')
-#     #     print(ret)
-#     # except:
-#     #     logger.exception('fail')
-    
-#     # print(rt)
-#     # return 
-#     # size = 6500
-#     # mem_struct = ctypes.string_at(rt.contents.shared_mem, size)
-#     # s3 = boto3.client('s3')
-#     # s3.put_object(Bucket='my-p-good-bucket', Key='memdump', Body=mem_struct)
-    
-#     # return
-    
-#     # print(hex(ctypes.c_void_p.from_buffer(rt.contents.shared_mem).value))
-#     # print(rt.contents.deadline)
-#     # res = ctypes.cast(addr, ctypes.POINTER(SharedMem)).contents
-    
-#     # print(os.execve("/var/lang/bin/python3.6", ["/var/task/lambda_function.py", context.aws_request_id], os.environ))
-
-
