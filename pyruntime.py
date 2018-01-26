@@ -46,7 +46,7 @@ def recv_fds(sock, msglen, maxfds):
     return msg, list(fds)
     
 def parse_x_amzn_trace_id(trace_id):
-    logger.debug(f'trace_id: "{trace_id}"')
+    # logger.debug(f'trace_id: "{trace_id}"')
     
     ctx = XrayContext()
     kvs =  { x[0]: x[1].encode('ascii') 
@@ -68,7 +68,7 @@ def parse_kv_msg(msg, decode=False):
     
     
 def clock_gettime_ns():
-    return int(10 * 9 * time.clock_gettime(time.CLOCK_MONOTONIC))
+    return int((10 ** 9) * time.clock_gettime(time.CLOCK_MONOTONIC))
     
     
 def get_time_of_day_millis():
@@ -91,6 +91,8 @@ def get_pretty_time(is_iso=False):
 
 # RUNTIME CLASS -------------------------------------------------------------- #
 class PyRuntime:
+    COMMAND_MAGIC = bytes([71,105,114,68])
+    
     def __init__(self):
         runtime = Runtime()
         
@@ -122,11 +124,11 @@ class PyRuntime:
                         prot=mmap.PROT_READ | mmap.PROT_WRITE)
         runtime.shared_mem = ctypes.pointer(SharedMem.from_buffer(shm))
         
-        if DEBUG:
-            out = check_output(['cat', '/proc/1/maps'])
-            out = out.decode('ascii')
-            out = out.split('\n')
-            logger.debug([i for i in out if 'shm' in i][0])
+        # if DEBUG:
+        #     out = check_output(['cat', '/proc/1/maps'])
+        #     out = out.decode('ascii')
+        #     out = out.split('\n')
+        #     logger.debug([i for i in out if 'shm' in i][0])
     
         # TODO Xray socket
         # socket(2, SOCK_DGRAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0)
@@ -179,17 +181,29 @@ class PyRuntime:
                 lambda_logf(False,
                 "[WARN] logging previous line took {}ms\n", duration)
             
-    def send_command(socket, kv_dict):
-        pass
+    def send_command(self, socket, command, kv_dict):
+        body = b''
+        for k, v in kv_dict.items():
+            body += (k + '\x00').encode('ascii')
+            body += (v + '\x00').encode('ascii')
+    
+        header = self.COMMAND_MAGIC
+        header += struct.pack('>I', len(body))
+        header += command.ljust(8, '\x00').encode('ascii')
+        
+        msg = header + body
+        # logger.debug('command to send: %s', msg)
+        socket.sendmsg([msg], [])
+    
     
     def receive_command(self):
         msg, fds = recv_fds(self.ctrl_sock, 4096, 10)
-        MAGIC = bytes([71,105,114,68])
+        
         header, body = msg[:16], msg[16:]
         magic = header[:4]
         length = struct.unpack('>I', header[4:8])[0]
         
-        assert magic == MAGIC
+        assert magic == self.COMMAND_MAGIC
         assert length == len(body)
         
         command = header[8:].split(b'\x00')[0].decode('ascii')
@@ -204,7 +218,7 @@ class PyRuntime:
         command, body = self.receive_command()
         kvs = parse_kv_msg(body)
         
-        logger.debug(kvs)
+        # logger.debug(kvs)
         
         assert command == 'START'
         
@@ -233,7 +247,21 @@ class PyRuntime:
                 start_request.credentials.to_dict())
                 
     def report_running(self, invoke_id):
-        pass
+        #  lambda_logf(1,
+        #             "[INFO] (%s@%s:%d) (invokeid=%s) report running\n",
+        #             "runtime_report_running",
+        #             "src/lambda/runtime.c",
+        #             573,
+        #             invokeid)
+        
+        running_msg_dict = {
+            'RUNTIME_PRELOAD_TIME_NS': str(self._runtime.pre_load_time_ns),
+            'RUNTIME_POSTLOAD_TIME_NS': str(self._runtime.post_load_time_ns),
+            'RUNTIME_WAIT_START_TIME_NS': str(self._runtime.wait_start_time_ns),
+            'RUNTIME_WAIT_END_TIME_NS': str(self._runtime.wait_end_time_ns)
+        }
+        # logger.debug('running message: %s', running_msg_dict)
+        self.send_command(self.ctrl_sock, 'RUNNING', running_msg_dict)
 
     
 # ---------------------------------------------------------------------------- #
@@ -244,7 +272,9 @@ def main():
     logger.info('Start of Boostrap')
     try:
         runtime = PyRuntime()
-        logger.debug(runtime.receive_start())
+        start = runtime.receive_start()
+        logger.debug(start)
+        runtime.report_running(start[0])
     except Exception as e:
         print('ERROR')
         logger.exception(e)
