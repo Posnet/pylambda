@@ -68,6 +68,32 @@ class XrayContext(PStruct):
         ("lambda_id", ctypes.c_char * 255)
         ]
             
+class AWSCredentials(PStruct):
+    _fields_ = [
+        ('key', ctypes.c_char * 128),
+        ('secret', ctypes.c_char * 128),
+        ('session', ctypes.c_char * 2048)
+        ]
+        
+    def to_dict(self):
+        return {key: getattr(self, key).decode('ascii')
+                for key, typ in self._fields_}
+            
+class RequestStart(PStruct):
+    
+    _fields_ = [
+        ("invoke_id", ctypes.c_char * 37),
+        ("credentials", AWSCredentials),
+        ("timeout_ms", ctypes.c_uint32),
+        ("suppress_user_init_function", ctypes.c_bool),
+        ("handler", ctypes.c_char * 128),
+        # In the actual runtime this is an enum
+        # event, http, none (0,1,2)
+        # however the string is sent in the command
+        # so it is easier just to keep it a string
+        ("mode", ctypes.c_char * 10) 
+        ]
+
 class Runtime(PStruct):
     _fields_ = [
         ("ctrl_sock", ctypes.c_int),
