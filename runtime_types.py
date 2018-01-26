@@ -7,6 +7,7 @@ FOLLOW_POINTER = True
 PREFIX = ''
 PN = 4
 P = PN * '_'
+
 class PStruct(ctypes.Structure):
     _pack_ = 0x8
     _pwr = 0x2
@@ -129,3 +130,14 @@ class Runtime(PStruct):
         ("init_xray_context", XrayContext),
         ("xray_context", XrayContext)
         ]
+        
+        
+def get_native_runtime_struct():
+    rt_pointer = ctypes.POINTER(Runtime)
+    l = ctypes.cdll.LoadLibrary(
+        '/var/runtime/awslambda/runtime.cpython-36m-x86_64-linux-gnu.so')
+    rt = rt_pointer.in_dll(l, '__runtime')
+    try:
+        return rt.contents
+    except ValueError:
+        return 'NullPointer'

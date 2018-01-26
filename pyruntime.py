@@ -294,6 +294,7 @@ class PyRuntime:
         pass
     
     def receive_invoke(self):
+        # note to self, this is where needs_debug_logs is set
         pass
         # return (
         # invokeid,
@@ -335,6 +336,7 @@ def main():
             cnt += 1
             logger.info('invoke: %s', cnt)
             invoke = runtime.receive_command()
+            logger.warn(invoke)
             runtime.report_done('', None, None)
             
     except Exception as e:
