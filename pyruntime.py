@@ -337,6 +337,13 @@ def main():
             logger.info('invoke: %s', cnt)
             invoke = runtime.receive_command()
             logger.warn(invoke)
+            
+            logger.debug(runtime._runtime.shared_mem.contents)
+            rsp = b'{"123": "123"}'
+            runtime._runtime.shared_mem.contents.event_body = rsp
+            runtime._runtime.shared_mem.contents.response_body_len = len(rsp)
+            runtime._runtime.shared_mem.contents.event_body_len = 0
+            logger.debug(runtime._runtime.shared_mem.contents)
             runtime.report_done('', None, None)
             
     except Exception as e:
