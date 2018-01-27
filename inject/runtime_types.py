@@ -66,7 +66,8 @@ class timeval(PStruct):
     def from_time(t):
         res = timeval()
         res.tv_sec = int(t)
-        res.tv_sec = (t - int(t)) * timeval.micro_factor
+        res.tv_sec = int((t - int(t)) * timeval.micro_factor)
+        return res
     
     
     def to_time(self):

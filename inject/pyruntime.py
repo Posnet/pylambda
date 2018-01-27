@@ -49,7 +49,7 @@ def parse_x_amzn_trace_id(trace_id):
     # logger.debug(f'trace_id: "{trace_id}"')
     
     ctx = XrayContext()
-    kvs =  { x[0]: x[1].encode('ascii') 
+    kvs =  { x[0]: x[1].encode() 
             for x in
             [y.split('=') for y in  trace_id.split(';')]
            }
@@ -63,7 +63,7 @@ def parse_x_amzn_trace_id(trace_id):
     
 def parse_kv_msg(msg, decode=False):
     msgs = msg.split(b'\x00')[:-1] 
-    msgs = [msg.decode('ascii') if decode else msg for msg in msgs ]
+    msgs = [msg.decode() if decode else msg for msg in msgs ]
     return dict(zip(msgs[::2], msgs[1::2]))
     
     
@@ -126,7 +126,7 @@ class PyRuntime:
         
         # if DEBUG:
         #     out = check_output(['cat', '/proc/1/maps'])
-        #     out = out.decode('ascii')
+        #     out = out.decode()
         #     out = out.split('\n')
         #     logger.debug([i for i in out if 'shm' in i][0])
     
@@ -156,26 +156,52 @@ class PyRuntime:
         # logger.debug(runtime)
         self._runtime = runtime
         
-    def log_bytes(self, msg, fd):
-        pass
         
-    def log_sb(self, msg):
-        self.lambda_logf(True, "{}\n", msg)
-        return fmt.format(text, millis)
+    def get_remaining_time(self):
+        # TODO
+        return 0
+    
+    
+    def log_bytes(self, message, fd):
+        self.add_logs_to_shared_buffer(message)
+        os.write(fd, message.encode())
         
         
-    def lambda_logf(profile, format_string, *args):
+    def log_sb(self, message):
+        self.lambda_logf(True, "{}\n", message)
+        
+        
+    def send_console_message(self, message, length):
+        # Write to debug log 
+        # FIXME, use needs debug logs
+        self.add_logs_to_shared_buffer(message)
+        self.send_command(self.console_sock, "MSG", message)
+        
+    def add_logs_to_shared_buffer(self, message):
+        message = message.encode()
+        length = len(message)
+        if True or self._runtime.needs_debug_logs:
+            sb = self._runtime.shared_mem.contents
+            space_left = 102968 - (sb.debug_log_len + length)
+            sb.debug_logs += message[:space_left]
+            sb.debug_log_len += min(space_left, length)
+        
+        
+    def lambda_logf(self, profile, format_string, *args):
         
         if profile:
             start = get_time_of_day_millis()
             
-        if not LOG_SINK:
+        if not self.LOG_SINK:
             sink = sys.stderr
+        else:
+            sink = self.LOG_SINK
+            
     
-        sink.write(f"{get_pretty_time(False)} ")
-        if LOG_CONTEXT:
-            sink.write(f' {{{LOG_CONTEXT}}} ')
-        sink.write(format_string.format(*args))
+        sink.write(f"{get_pretty_time(False)} ".encode())
+        if self.LOG_CONTEXT:
+            sink.write(f' {{{self.LOG_CONTEXT}}} '.encode())
+        sink.write(format_string.format(*args).encode())
         
         if profile:
             duration = get_time_of_day_millis() - start
@@ -183,15 +209,18 @@ class PyRuntime:
                 lambda_logf(False,
                 "[WARN] logging previous line took {}ms\n", duration)
             
-    def send_command(self, socket, command, kv_dict):
+    def send_command(self, socket, command, message):
         body = b''
-        for k, v in kv_dict.items():
-            body += (str(k) + '\x00').encode('ascii')
-            body += (str(v) + '\x00').encode('ascii')
+        if type(message) == dict:
+            for k, v in message.items():
+                body += (str(k) + '\x00').encode()
+                body += (str(v) + '\x00').encode()
+        else:
+            body += message.encode()
     
         header = self.COMMAND_MAGIC
         header += struct.pack('>I', len(body))
-        header += command.ljust(8, '\x00').encode('ascii')
+        header += command.ljust(8, '\x00').encode()
         
         msg = header + body
         # logger.debug('command to send: %s', msg)
@@ -208,7 +237,7 @@ class PyRuntime:
         assert magic == self.COMMAND_MAGIC
         assert length == len(body)
         
-        command = header[8:].split(b'\x00')[0].decode('ascii')
+        command = header[8:].split(b'\x00')[0].decode()
     
         return command, body
     
@@ -242,9 +271,9 @@ class PyRuntime:
         
         self._runtime.wait_end_time_ns = clock_gettime_ns()
         
-        return (start_request.invoke_id.decode('ascii'),
-                start_request.mode.decode('ascii'),
-                start_request.handler.decode('ascii'),
+        return (start_request.invoke_id.decode(),
+                start_request.mode.decode(),
+                start_request.handler.decode(),
                 start_request.suppress_user_init_function,
                 start_request.credentials.to_dict())
                 
@@ -281,14 +310,7 @@ class PyRuntime:
     def report_user_invoke_end(self):
         # TODO: if we are traced with xray, we need to send subsegments
         pass
-    
-    
-    def get_remaining_time(self):
-        pass
-    
-    
-    def send_console_message(self):
-        pass
+        
     
     def report_fault(self):
         pass
@@ -298,8 +320,7 @@ class PyRuntime:
         command, body = self.receive_command()
         kvs = parse_kv_msg(body)
         return command, kvs
-        return (command, )
-        pass
+
         # return (
         # invokeid,
         # data_sock,
@@ -330,7 +351,7 @@ def main():
     try:
         runtime = PyRuntime()
         start = runtime.receive_start()
-        logger.debug(start)
+        # logger.debug(start)
         runtime.report_running(start[0])
         runtime.report_done(start[0], None, None)
         logger.warn('after report running')
@@ -340,14 +361,18 @@ def main():
             cnt += 1
             logger.info('invoke: %s', cnt)
             invoke = runtime.receive_invoke()
-            logger.warn(invoke)
+            # logger.warn(invoke)
             
-            logger.debug(runtime._runtime.shared_mem.contents)
+            # logger.debug(runtime._runtime.shared_mem.contents)
             rsp = b'{"123": "123"}'
+            m = 'test message'
+            runtime.send_console_message(m, len(m))
+            runtime.log_bytes(m, sys.stdout.fileno())
+            sys.stdout.flush()
             runtime._runtime.shared_mem.contents.event_body = rsp
             runtime._runtime.shared_mem.contents.response_body_len = len(rsp)
             runtime._runtime.shared_mem.contents.event_body_len = 0
-            logger.debug(runtime._runtime.shared_mem.contents)
+            # logger.debug(runtime._runtime.shared_mem.contents)
             runtime.report_done('', None, None)
             
     except Exception as e:

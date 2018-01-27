@@ -20,7 +20,9 @@ import sys
 import time
 import traceback
 
-import runtime as lambda_runtime
+from .pyruntime import PyRuntime
+
+lambda_runtime = PyRuntime()
 
 import wsgi
 
@@ -464,6 +466,7 @@ def log_info(msg):
 
 
 def main():
+    log_info("main started at epoch {0}".format(int(round(time.time() * 1000))))
     if sys.version_info[0] < 3:
         reload(sys)
         sys.setdefaultencoding('utf-8')

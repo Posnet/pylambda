@@ -1,6 +1,6 @@
 import sys
-from inject.pyruntime import main
-print(sys.path)
-# main()
-# TODO, set exit via env
+# from inject.pyruntime import main
+from inject.bootstrap import main
+
+main()
 sys.exit(1)
