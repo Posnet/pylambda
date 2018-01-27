@@ -1,6 +1,6 @@
 import sys
-from pyruntime import main
-
-main()
+from inject.pyruntime import main
+print(sys.path)
+# main()
 # TODO, set exit via env
 sys.exit(1)
