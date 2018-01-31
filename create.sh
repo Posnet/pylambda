@@ -1,4 +1,5 @@
 #!/bin/bash
+
 echo "def handler(msg, ctx):
     return True" > handler.py;
 zip -r lambda_code.zip handler.py;
