@@ -1,2 +1,4 @@
 #!/bin/bash
-#aws lambda update-function-code --zip-file fileb://lambda.zip --function-name Injector
+aws lambda invoke --function-name $LAMBDA_NAME out.json > /dev/null
+cat out.json
+rm out.json

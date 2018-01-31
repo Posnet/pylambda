@@ -8,5 +8,6 @@ else
 fi
 
 aws lambda update-function-configuration \
+    echo $current_path
     --function-name $LAMBDA_NAME \
     --environment "Variables={LOG_LEVEL=DEBUG,PYTHONPATH=${new_path}}"
