@@ -1,2 +1,4 @@
 lambda_code.zip
 __pycache__
+.direnv
+.envrc
