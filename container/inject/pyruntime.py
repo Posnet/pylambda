@@ -163,21 +163,21 @@ class PyRuntime:
     
     
     def log_bytes(self, message, fd):
-        self.add_logs_to_shared_buffer(message)
+        self._add_logs_to_shared_buffer(message)
         os.write(fd, message.encode())
         
         
     def log_sb(self, message):
-        self.lambda_logf(True, "{}\n", message)
+        self._lambda_logf(True, "{}\n", message)
         
         
     def send_console_message(self, message, length):
         # Write to debug log 
         # FIXME, use needs debug logs
-        self.add_logs_to_shared_buffer(message)
-        self.send_command(self.console_sock, "MSG", message)
+        self._add_logs_to_shared_buffer(message)
+        self._send_command(self.console_sock, "MSG", message)
         
-    def add_logs_to_shared_buffer(self, message):
+    def _add_logs_to_shared_buffer(self, message):
         message = message.encode()
         length = len(message)
         if True or self._runtime.needs_debug_logs:
@@ -187,7 +187,7 @@ class PyRuntime:
             sb.debug_log_len += min(space_left, length)
         
         
-    def lambda_logf(self, profile, format_string, *args):
+    def _lambda_logf(self, profile, format_string, *args):
         
         if profile:
             start = get_time_of_day_millis()
@@ -209,7 +209,7 @@ class PyRuntime:
                 lambda_logf(False,
                 "[WARN] logging previous line took {}ms\n", duration)
             
-    def send_command(self, socket, command, message):
+    def _send_command(self, socket, command, message):
         body = b''
         if type(message) == dict:
             for k, v in message.items():
@@ -227,8 +227,15 @@ class PyRuntime:
         socket.sendmsg([msg], [])
     
     
-    def receive_command(self):
+    def _receive_command(self):
         msg, fds = recv_fds(self.ctrl_sock, 4096, 10)
+        
+        logger.debug(f"fds: {fds}") 
+        # in theory we could recieve additionals file descriptors over the
+        # socket, however I have yet to see this happen in practise.
+        # And even if we did pass it anywhere,
+        # such as in the case of receive invoke, the file
+        # descriptor is discarded immediatly in bootstrap.py
         
         header, body = msg[:16], msg[16:]
         magic = header[:4]
@@ -246,7 +253,7 @@ class PyRuntime:
         
         start_request = RequestStart()
         
-        command, body = self.receive_command()
+        command, body = self._receive_command()
         kvs = parse_kv_msg(body)
         
         # logger.debug(kvs)
@@ -292,7 +299,7 @@ class PyRuntime:
             'RUNTIME_WAIT_END_TIME_NS': str(self._runtime.wait_end_time_ns)
         }
         # logger.debug('running message: %s', running_msg_dict)
-        self.send_command(self.ctrl_sock, 'RUNNING', running_msg_dict)
+        self._send_command(self.ctrl_sock, 'RUNNING', running_msg_dict)
         
     def report_user_init_start(self):
         self._runtime.init_start_time = timeval.from_time(time.time())
@@ -317,29 +324,53 @@ class PyRuntime:
     
     def receive_invoke(self):
         # note to self, this is where needs_debug_logs is set
-        command, body = self.receive_command()
+        command, body = self._receive_command()
         kvs = parse_kv_msg(body)
-        return command, kvs
-
-        # return (
-        # invokeid,
-        # data_sock,
-        # credentials,
-        # event_body,
-        # context_objs,
-        # invoked_function_arn,
-        # x_amzn_trace_id
-        # )
+        
+        kvs = {k.decode(): v.decode() for k,v in kvs.items()}
+        
+        self._runtime.needs_debug_logs = bool(int(kvs['needdebuglogs']))
+        self._runtime.deadline_ns = int(kvs['deadlinens'])
+        self._runtime.function_arn = kvs['invokedFunctionArn'].encode()
+        
+        event_length = self._runtime.shared_mem.contents.event_body_len
+        event_body = self._runtime.shared_mem.contents.event_body[:event_length]
+        event_body.decode()
+        
+        return (
+            kvs['invokeid'],
+            -1, # hmmm see 
+            {
+                'key': kvs.get('awskey', None),
+                'secret': kvs.get('awssecret', None),
+                'session': kvs.get('awssecret', None)
+            },
+            event_body,
+            {
+                'cognito_identity_id': kvs.get('cognitoidentityid', None),
+                'cognito_identity_pool_id': kvs.get('cognitopoolid', None),
+                'client_context': None # Haven't seen this either
+            },
+            kvs['invokedFunctionArn'],
+            kvs['x-amzn-trace-id'],
+        )
     
     def report_done(self, invokeid, errortype, result):
         # TODO write output to shared buffer
+        if result:
+            shared_mem = self._runtime.shared_mem.contents
+            result = result.encode()
+            result_length = len(result)
+        
+            shared_mem.event_body = result
+            shared_mem.response_body_len = result_length
         
         command = 'DONE'
         kv_dict = {'errortype': errortype or '',
         'SBLOG:MaxStallTimeMs': self._runtime.max_stall_time_ms or 0,
         'wait_for_exit': 0}
         
-        self.send_command(self.ctrl_sock, command, kv_dict)
+        self._send_command(self.ctrl_sock, command, kv_dict)
         
     
 # ---------------------------------------------------------------------------- #
@@ -361,7 +392,7 @@ def main():
             cnt += 1
             logger.info('invoke: %s', cnt)
             invoke = runtime.receive_invoke()
-            # logger.warn(invoke)
+            logger.warn(invoke)
             
             # logger.debug(runtime._runtime.shared_mem.contents)
             rsp = b'{"123": "123"}'

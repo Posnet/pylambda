@@ -9,7 +9,7 @@ Lambda runtime implemention
 """
 from __future__ import print_function
 
-import decimal
+# import decimal
 import imp
 import json
 import logging
@@ -43,6 +43,9 @@ def _get_handlers(handler, mode):
 
     try:
         (modname, fname) = handler.rsplit('.', 1)
+        # TODO, remove this and get a different handler
+        # by fixing the path
+        fname = 'py' + fname
     except ValueError as e:
         fault = wsgi.FaultException("Bad handler '{}'".format(handler), str(e), None)
         request_handler = make_fault_handler(fault)
