@@ -5,15 +5,13 @@
 import ctypes
 import os
 import socket
-import sys
 from ctypes.util import find_library
 
-__all__ = ('fromfd',)
+__all__ = ('fromfd', )
 
 SO_DOMAIN = getattr(socket, 'SO_DOMAIN', 39)
 SO_TYPE = getattr(socket, 'SO_TYPE', 3)
 SO_PROTOCOL = getattr(socket, 'SO_PROTOCOL', 38)
-
 
 _libc_name = find_library('c')
 if _libc_name is not None:
@@ -78,4 +76,3 @@ def fromfd(fd, keep_fd=True):
         return socket.socket(family, typ, proto, fileno=fd)
     else:
         return socket.fromfd(fd, family, typ, proto)
-            

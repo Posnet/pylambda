@@ -30,7 +30,6 @@ import wsgi
 def _get_handlers(handler, mode):
     lambda_runtime.report_user_init_start()
     init_handler = lambda: None
-
     """
     This is the old way we were loading modules.
     It was causing intermittent build failures for unknown reasons.
@@ -47,7 +46,8 @@ def _get_handlers(handler, mode):
         # by fixing the path
         fname = 'py' + fname
     except ValueError as e:
-        fault = wsgi.FaultException("Bad handler '{}'".format(handler), str(e), None)
+        fault = wsgi.FaultException("Bad handler '{}'".format(handler),
+                                    str(e), None)
         request_handler = make_fault_handler(fault)
         lambda_runtime.report_user_init_end()
         return init_handler, request_handler
@@ -62,11 +62,10 @@ def _get_handlers(handler, mode):
         if file_handle is None:
             module_type = desc[2]
             if module_type == imp.C_BUILTIN:
-                request_handler = make_fault_handler(wsgi.FaultException(
-                    "Cannot use built-in module {} as a handler module".format(modname),
-                    None,
-                    None
-                ))
+                request_handler = make_fault_handler(
+                    wsgi.FaultException(
+                        "Cannot use built-in module {} as a handler module".
+                        format(modname), None, None))
                 lambda_runtime.report_user_init_end()
                 return init_handler, request_handler
         m = imp.load_module(modname, file_handle, pathname, desc)
@@ -86,7 +85,9 @@ def _get_handlers(handler, mode):
     try:
         request_handler = make_final_handler(getattr(m, fname), mode)
     except AttributeError as e:
-        fault = wsgi.FaultException("Handler '{}' missing on module '{}'".format(fname, modname), str(e), None)
+        fault = wsgi.FaultException(
+            "Handler '{}' missing on module '{}'".format(fname, modname),
+            str(e), None)
         request_handler = make_fault_handler(fault)
     lambda_runtime.report_user_init_end()
     return init_handler, request_handler
@@ -117,14 +118,18 @@ def decimal_serializer(o):
 
 def load_handler_failed_handler(e, modname):
     if isinstance(e, ImportError):
-        return make_fault_handler(wsgi.FaultException("Unable to import module '{}'".format(modname), str(e), None))
+        return make_fault_handler(
+            wsgi.FaultException("Unable to import module '{}'".format(modname),
+                                str(e), None))
     elif isinstance(e, SyntaxError):
         trace = "File \"%s\" Line %s\n\t%s" % (e.filename, e.lineno, e.text)
-        fault = wsgi.FaultException("Syntax error in module '{}'".format(modname), str(e), trace)
+        fault = wsgi.FaultException(
+            "Syntax error in module '{}'".format(modname), str(e), trace)
     else:
         exc_info = sys.exc_info()
         trace = traceback.format_list(traceback.extract_tb(exc_info[2]))
-        fault = wsgi.FaultException("module initialization error", str(e), trace[1:])
+        fault = wsgi.FaultException("module initialization error",
+                                    str(e), trace[1:])
     return make_fault_handler(fault)
 
 
@@ -136,7 +141,8 @@ def make_fault_handler(fault):
 
 
 def set_environ(credentials):
-    key, secret, session = credentials.get('key'), credentials.get('secret'), credentials.get('session')
+    key, secret, session = credentials.get('key'), credentials.get(
+        'secret'), credentials.get('session')
     # TODO delete from environ if params not found
     if credentials.get('key'):
         os.environ['AWS_ACCESS_KEY_ID'] = key
@@ -163,7 +169,8 @@ def force_path_importer_cache_update():
 
 
 def wait_for_start():
-    (invokeid, mode, handler, suppress_init, credentials) = lambda_runtime.receive_start()
+    (invokeid, mode, handler, suppress_init,
+     credentials) = lambda_runtime.receive_start()
     force_path_importer_cache_update()
     set_environ(credentials)
     lambda_runtime.report_running(invokeid)
@@ -172,37 +179,35 @@ def wait_for_start():
 
 
 def wait_for_invoke():
-    (
-        invokeid,
-        data_sock,
-        credentials,
-        event_body,
-        context_objs,
-        invoked_function_arn,
-        x_amzn_trace_id
-    ) = lambda_runtime.receive_invoke()
+    (invokeid, data_sock, credentials, event_body, context_objs,
+     invoked_function_arn, x_amzn_trace_id) = lambda_runtime.receive_invoke()
 
     set_environ(credentials)
 
-    return (invokeid, x_amzn_trace_id, data_sock, credentials, event_body, context_objs, invoked_function_arn)
+    return (invokeid, x_amzn_trace_id, data_sock, credentials, event_body,
+            context_objs, invoked_function_arn)
 
 
 def make_final_handler(handlerfn, mode):
     if mode == "http":
+
         def result(sockfd):
             invoke_http(handlerfn, sockfd)
     elif mode == "event":
         return handlerfn
     else:
+
         def result(sockfd):
             raise wsgi.FaultException("specified mode is invalid: " + mode)
+
     return result
 
 
 def invoke_http(handlerfn, sockfd):
     fault_data = wsgi.handle_one(sockfd, ('localhost', 80), handlerfn)
     if fault_data:
-        raise wsgi.FaultException(fault_data.msg, fault_data.except_value, fault_data.trace)
+        raise wsgi.FaultException(fault_data.msg, fault_data.except_value,
+                                  fault_data.trace)
 
 
 def try_or_raise(function, error_message):
@@ -232,7 +237,9 @@ def handle_http_request(request_handler, invokeid, sockfd):
         try:
             os.close(sockfd)
         except Exception as e:
-            print("Error closing original data connection descriptor", file=sys.stderr)
+            print(
+                "Error closing original data connection descriptor",
+                file=sys.stderr)
             traceback.print_exc()
         finally:
             lambda_runtime.report_done(invokeid, None, None)
@@ -242,17 +249,23 @@ def to_json(obj):
     return json.dumps(obj, default=decimal_serializer)
 
 
-def handle_event_request(request_handler, invokeid, event_body, context_objs, invoked_function_arn):
+def handle_event_request(request_handler, invokeid, event_body, context_objs,
+                         invoked_function_arn):
     lambda_runtime.report_user_invoke_start()
     errortype = None
     try:
         client_context = context_objs.get('client_context')
         if client_context:
-            client_context = try_or_raise(lambda: json.loads(client_context), "Unable to parse client context")
-        context = LambdaContext(invokeid, context_objs, client_context, invoked_function_arn)
-        json_input = try_or_raise(lambda: json.loads(event_body), "Unable to parse input as json")
+            client_context = try_or_raise(lambda: json.loads(client_context),
+                                          "Unable to parse client context")
+        context = LambdaContext(invokeid, context_objs, client_context,
+                                invoked_function_arn)
+        json_input = try_or_raise(lambda: json.loads(event_body),
+                                  "Unable to parse input as json")
         result = request_handler(json_input, context)
-        result = try_or_raise(lambda: to_json(result), "An error occurred during JSON serialization of response")
+        result = try_or_raise(
+            lambda: to_json(result),
+            "An error occurred during JSON serialization of response")
     except wsgi.FaultException as e:
         lambda_runtime.report_fault(invokeid, e.msg, e.except_value, None)
         report_xray_fault_helper("LambdaValidationError", e.msg, [])
@@ -276,19 +289,11 @@ def craft_xray_fault(ex_type, ex_msg, working_dir, tb_tuples):
     files = set()
     for t in tb_tuples:
         tb_file, tb_line, tb_method, tb_code = t
-        tb_xray = {
-            'label': tb_method,
-            'path': tb_file,
-            'line': tb_line
-        }
+        tb_xray = {'label': tb_method, 'path': tb_file, 'line': tb_line}
         stack.append(tb_xray)
         files.add(tb_file)
 
-    formatted_ex = {
-        'message': ex_msg,
-        'type': ex_type,
-        'stack': stack
-    }
+    formatted_ex = {'message': ex_msg, 'type': ex_type, 'stack': stack}
     xray_fault = {
         'working_directory': working_dir,
         'exceptions': [formatted_ex],
@@ -328,15 +333,10 @@ def report_fault_helper(invokeid, exc_info, msg):
             break
 
     lambda_runtime.report_fault(
-        invokeid,
-        msgs[0],
-        msgs[1],
-        (
-            "Traceback (most recent call last):\n"
-            + ''.join(traceback.format_list(tb_tuples))
-            + ''.join(traceback.format_exception_only(etype, value))
-        )
-    )
+        invokeid, msgs[0], msgs[1],
+        ("Traceback (most recent call last):\n" +
+         ''.join(traceback.format_list(tb_tuples)) +
+         ''.join(traceback.format_exception_only(etype, value))))
     report_xray_fault_helper(etype.__name__, msgs[0], tb_tuples)
 
     return make_error(str(value), etype.__name__, tb_tuples)
@@ -349,7 +349,8 @@ def extract_traceback(tb):
         # Python3 returns a list of SummaryFrames instead of a list of tuples
         # for traceback.extract_tb() calls.
         # To make it consistent, we map the list of frames to a list of tuples just like python2
-        frames = [(frame.filename, frame.lineno, frame.name, frame.line) for frame in frames]
+        frames = [(frame.filename, frame.lineno, frame.name, frame.line)
+                  for frame in frames]
 
     return frames
 
@@ -376,7 +377,10 @@ class CognitoIdentity(object):
 
 
 class Client(object):
-    __slots__ = ["installation_id", "app_title", "app_version_name", "app_version_code", "app_package_name"]
+    __slots__ = [
+        "installation_id", "app_title", "app_version_name", "app_version_code",
+        "app_package_name"
+    ]
 
 
 class ClientContext(object):
@@ -417,7 +421,11 @@ def byte_len(s):
 
 
 class LambdaContext(object):
-    def __init__(self, invokeid, context_objs, client_context, invoked_function_arn=None):
+    def __init__(self,
+                 invokeid,
+                 context_objs,
+                 client_context,
+                 invoked_function_arn=None):
         self.aws_request_id = invokeid
         self.log_group_name = os.environ['AWS_LAMBDA_LOG_GROUP_NAME']
         self.log_stream_name = os.environ['AWS_LAMBDA_LOG_STREAM_NAME']
@@ -428,7 +436,8 @@ class LambdaContext(object):
 
         self.client_context = make_obj_from_dict(ClientContext, client_context)
         if self.client_context is not None:
-            self.client_context.client = make_obj_from_dict(Client, self.client_context.client)
+            self.client_context.client = make_obj_from_dict(
+                Client, self.client_context.client)
         self.identity = make_obj_from_dict(CognitoIdentity, context_objs)
 
     def get_remaining_time_in_millis(self):
@@ -469,7 +478,8 @@ def log_info(msg):
 
 
 def main():
-    log_info("main started at epoch {0}".format(int(round(time.time() * 1000))))
+    log_info(
+        "main started at epoch {0}".format(int(round(time.time() * 1000))))
     if sys.version_info[0] < 3:
         reload(sys)
         sys.setdefaultencoding('utf-8')
@@ -480,10 +490,10 @@ def main():
     logging.Formatter.converter = time.gmtime
     logger = logging.getLogger()
     logger_handler = LambdaLoggerHandler()
-    logger_handler.setFormatter(logging.Formatter(
-        '[%(levelname)s]\t%(asctime)s.%(msecs)dZ\t%(aws_request_id)s\t%(message)s\n',
-        '%Y-%m-%dT%H:%M:%S'
-    ))
+    logger_handler.setFormatter(
+        logging.Formatter(
+            '[%(levelname)s]\t%(asctime)s.%(msecs)dZ\t%(aws_request_id)s\t%(message)s\n',
+            '%Y-%m-%dT%H:%M:%S'))
     logger_handler.addFilter(LambdaLoggerFilter())
     logger.addHandler(logger_handler)
 
@@ -491,12 +501,9 @@ def main():
 
     # Remove lambda internal environment variables
     for env in [
-        "_LAMBDA_CONTROL_SOCKET",
-        "_LAMBDA_SHARED_MEM_FD",
-        "_LAMBDA_LOG_FD",
-        "_LAMBDA_SB_ID",
-        "_LAMBDA_CONSOLE_SOCKET",
-        "_LAMBDA_RUNTIME_LOAD_TIME"
+            "_LAMBDA_CONTROL_SOCKET", "_LAMBDA_SHARED_MEM_FD",
+            "_LAMBDA_LOG_FD", "_LAMBDA_SB_ID", "_LAMBDA_CONSOLE_SOCKET",
+            "_LAMBDA_RUNTIME_LOAD_TIME"
     ]:
         del os.environ[env]
 
@@ -513,10 +520,12 @@ def main():
         init_handler, request_handler = _get_handlers(handler, mode)
     run_init_handler(init_handler, invokeid)
     lambda_runtime.report_done(invokeid, None, None)
-    log_info("init complete at epoch {0}".format(int(round(time.time() * 1000))))
+    log_info(
+        "init complete at epoch {0}".format(int(round(time.time() * 1000))))
 
     while True:
-        (invokeid, x_amzn_trace_id, sockfd, credentials, event_body, context_objs, invoked_function_arn) = wait_for_invoke()
+        (invokeid, x_amzn_trace_id, sockfd, credentials, event_body,
+         context_objs, invoked_function_arn) = wait_for_invoke()
         _GLOBAL_AWS_REQUEST_ID = invokeid
 
         if x_amzn_trace_id != None:
@@ -532,9 +541,11 @@ def main():
         if mode == "http":
             handle_http_request(request_handler, invokeid, sockfd)
         elif mode == "event":
-            handle_event_request(request_handler, invokeid, event_body, context_objs, invoked_function_arn)
+            handle_event_request(request_handler, invokeid, event_body,
+                                 context_objs, invoked_function_arn)
 
 
 if __name__ == '__main__':
-    log_info("main started at epoch {0}".format(int(round(time.time() * 1000))))
+    log_info(
+        "main started at epoch {0}".format(int(round(time.time() * 1000))))
     main()

@@ -8,13 +8,15 @@ PREFIX = ''
 PN = 4
 P = PN * '_'
 
+
 class PStruct(ctypes.Structure):
     _pack_ = 0x8
     _pwr = 0x2
+
     def __init__(self, *args, **kwargs):
-       self._prefix = ''
-       super().__init__(*args, **kwargs)
-       
+        self._prefix = ''
+        super().__init__(*args, **kwargs)
+
     def __str__(self):
         global PREFIX
         total = 0
@@ -26,25 +28,23 @@ class PStruct(ctypes.Structure):
             if FOLLOW_POINTER:
                 while hasattr(val, 'contents'):
                     val = val.contents
-                 
 
-                
             ret += f'{PREFIX}{hex(total)} {n}: {str(val)},\n'
-            
             size = sizeof(t)
             total += size
             if PADDING:
-               rem = total % self._pack_
-               if total % self._pwr != 0:
-                   padding = self._pack_ - rem
-                   ret += f'{PREFIX}{hex(total)}  padding: {padding},\n'
-                   total += padding
+                rem = total % self._pack_
+                if total % self._pwr != 0:
+                    padding = self._pack_ - rem
+                    ret += f'{PREFIX}{hex(total)}  padding: {padding},\n'
+                    total += padding
         ret = ret[:-2]
         if hasattr(self, '_pack_'):
             PREFIX = PREFIX[-PN:]
         ret += '}'
 
         return ret
+
 
 class SharedMem(PStruct):
     _fields_ = [
@@ -54,26 +54,26 @@ class SharedMem(PStruct):
         ('debug_logs', ctypes.c_char * 102968),
         ('response_body_len', ctypes.c_int),
     ]
-        
+
+
 class timeval(PStruct):
     micro_factor = 10 ** 6
     _fields_ = [
         ("tv_sec", ctypes.c_uint64),
         ("tv_usec", ctypes.c_uint64)
         ]
-        
+
     @staticmethod
     def from_time(t):
         res = timeval()
         res.tv_sec = int(t)
         res.tv_sec = int((t - int(t)) * timeval.micro_factor)
         return res
-    
-    
+
     def to_time(self):
         return self.tv_sec + (self.tv_usec / timeval.micro_factor)
-        
-        
+
+
 class XrayContext(PStruct):
     _fields_ = [
         ("trace_id", ctypes.c_char * 255),
@@ -81,20 +81,21 @@ class XrayContext(PStruct):
         ("parent_id", ctypes.c_char * 255),
         ("lambda_id", ctypes.c_char * 255)
         ]
-            
+
+
 class AWSCredentials(PStruct):
     _fields_ = [
         ('key', ctypes.c_char * 128),
         ('secret', ctypes.c_char * 128),
         ('session', ctypes.c_char * 2048)
         ]
-        
+
     def to_dict(self):
         return {key: getattr(self, key).decode('ascii')
                 for key, typ in self._fields_}
-            
+
+
 class RequestStart(PStruct):
-    
     _fields_ = [
         ("invoke_id", ctypes.c_char * 37),
         ("credentials", AWSCredentials),
@@ -105,8 +106,9 @@ class RequestStart(PStruct):
         # event, http, none (0,1,2)
         # however the string is sent in the command
         # so it is easier just to keep it a string
-        ("mode", ctypes.c_char * 10) 
+        ("mode", ctypes.c_char * 10)
         ]
+
 
 class Runtime(PStruct):
     _fields_ = [
@@ -131,13 +133,13 @@ class Runtime(PStruct):
         ("init_xray_context", XrayContext),
         ("xray_context", XrayContext)
         ]
-        
-        
+
+
 def get_native_runtime_struct():
     rt_pointer = ctypes.POINTER(Runtime)
-    l = ctypes.cdll.LoadLibrary(
+    dll = ctypes.cdll.LoadLibrary(
         '/var/runtime/awslambda/runtime.cpython-36m-x86_64-linux-gnu.so')
-    rt = rt_pointer.in_dll(l, '__runtime')
+    rt = rt_pointer.in_dll(dll, '__runtime')
     try:
         return rt.contents
     except ValueError:
