@@ -330,6 +330,8 @@ class PyRuntime:
                                                                   event_length]
         event_body.decode()
 
+        logger.debug(kvs)
+
         return (
             kvs['invokeid'],
             -1,  # hmmm see
@@ -342,7 +344,7 @@ class PyRuntime:
             {
                 'cognito_identity_id': kvs.get('cognitoidentityid', None),
                 'cognito_identity_pool_id': kvs.get('cognitopoolid', None),
-                'client_context': None  # Haven't seen this either
+                'client_context': kvs.get('clientcontext', None)
             },
             kvs['invokedFunctionArn'],
             kvs['x-amzn-trace-id'], )
