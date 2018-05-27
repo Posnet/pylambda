@@ -373,6 +373,8 @@ class PyRuntime:
 
 
 # ENTRYPOINT ----------------------------------------------------------------- #
+
+# Used for testing, look at bootstrap.py for the actual event loop.
 def main():
     logger.info('Start of Boostrap')
     try:
