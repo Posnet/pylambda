@@ -7,10 +7,8 @@ Note there is no reason to use this runtime directly, it is incomplete, slower a
 
 It is purely a learning experiment, and can server as a base for writing more performant more flexible runtimes than those that are provided natively by AWS Lambda.
 
-### copy to .envrc and use direnv
-for example:
+### Set the following environment variables
 ```
-layout python
 export LAMBDA_NAME=pyinject
 export LAMBDA_ROLE=arn:aws:iam::12345678910:role/service-role/lambda-execution-role
 ```
