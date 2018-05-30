@@ -7,10 +7,10 @@ import ctypes
 import socket
 import array
 import struct
-from .fromfd import fromfd
+from fromfd import fromfd
 from ctypes import sizeof
 from os import environ
-from .runtime_types import XrayContext, Runtime, SharedMem, RequestStart, AWSCredentials, timeval
+from runtime_types import XrayContext, Runtime, SharedMem, RequestStart, AWSCredentials, timeval
 
 # LOGGING -------------------------------------------------------------------- #
 # LAMBDA_LOG_FORMAT = \
@@ -311,7 +311,12 @@ class PyRuntime:
         # TODO: if we are traced with xray, we need to send subsegments
         pass
 
-    def report_fault(self):
+    def report_xray_exception(self, xray_json, *args, **kwargs):
+        # TODO
+        pass
+
+    def report_fault(self, *args, **kwargs):
+        # TODO
         pass
 
     def receive_invoke(self):
@@ -349,8 +354,10 @@ class PyRuntime:
             kvs['invokedFunctionArn'],
             kvs['x-amzn-trace-id'], )
 
-    def report_done(self, invokeid, errortype, result):
-        # TODO write output to shared buffer
+    def report_done(self, invokeid, errortype, result, *args):
+        # TODO, investigate extra arg
+        print(*args)
+
         if result:
             shared_mem = self._runtime.shared_mem.contents
             result = result.encode()

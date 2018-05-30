@@ -20,7 +20,7 @@ import sys
 import time
 import traceback
 
-from .pyruntime import PyRuntime
+from pyruntime import PyRuntime
 
 lambda_runtime = PyRuntime()
 
@@ -128,8 +128,8 @@ def load_handler_failed_handler(e, modname):
     else:
         exc_info = sys.exc_info()
         trace = traceback.format_list(traceback.extract_tb(exc_info[2]))
-        fault = wsgi.FaultException("module initialization error",
-                                    str(e), trace[1:])
+        fault = wsgi.FaultException(
+            "module initialization error", str(e), trace[1:], fatal=True)
     return make_fault_handler(fault)
 
 
@@ -242,7 +242,7 @@ def handle_http_request(request_handler, invokeid, sockfd):
                 file=sys.stderr)
             traceback.print_exc()
         finally:
-            lambda_runtime.report_done(invokeid, None, None)
+            lambda_runtime.report_done(invokeid, None, None, 0)
 
 
 def to_json(obj):
@@ -253,6 +253,7 @@ def handle_event_request(request_handler, invokeid, event_body, context_objs,
                          invoked_function_arn):
     lambda_runtime.report_user_invoke_start()
     errortype = None
+    fatal = False
     try:
         client_context = context_objs.get('client_context')
         if client_context:
@@ -272,6 +273,7 @@ def handle_event_request(request_handler, invokeid, event_body, context_objs,
         result = make_error(e.msg, None, None)
         result = to_json(result)
         errortype = "unhandled"
+        fatal = e.fatal
     except JsonError as e:
         result = report_fault_helper(invokeid, e.exc_info, e.msg)
         result = to_json(result)
@@ -281,7 +283,9 @@ def handle_event_request(request_handler, invokeid, event_body, context_objs,
         result = to_json(result)
         errortype = "unhandled"
     lambda_runtime.report_user_invoke_end()
-    lambda_runtime.report_done(invokeid, errortype, result)
+    lambda_runtime.report_done(invokeid, errortype, result, 1 if fatal else 0)
+    if fatal:
+        sys.exit(1)
 
 
 def craft_xray_fault(ex_type, ex_msg, working_dir, tb_tuples):
@@ -519,7 +523,7 @@ def main():
     else:
         init_handler, request_handler = _get_handlers(handler, mode)
     run_init_handler(init_handler, invokeid)
-    lambda_runtime.report_done(invokeid, None, None)
+    lambda_runtime.report_done(invokeid, None, None, 0)
     log_info(
         "init complete at epoch {0}".format(int(round(time.time() * 1000))))
 
@@ -546,6 +550,6 @@ def main():
 
 
 if __name__ == '__main__':
-    log_info(
-        "main started at epoch {0}".format(int(round(time.time() * 1000))))
+    # log_info(
+    #     "main started at epoch {0}".format(int(round(time.time() * 1000))))
     main()
